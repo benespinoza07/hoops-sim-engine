@@ -23,6 +23,10 @@ class Player:
         self.tendencies = ARCHETYPES[archetype]["tendencies"]
         self.playstyle = ARCHETYPES[archetype]["playstyle"]
 
+        # Add stamina system
+        self.max_stamina = 100
+        self.stamina = 100
+
         # Stats come after identity attributes
         self.stats = {
             "points": 0,
@@ -43,3 +47,6 @@ class Player:
     def reset_stats(self):
         for key in self.stats:
             self.stats[key] = 0
+
+        # Reset stamina each game
+        self.stamina = self.max_stamina
