@@ -46,7 +46,7 @@ class GameSim:
         else:  # Drive logic
             shooter.stats["fg_attempts"] += 1
             shot_value = 2
-            shot_rating = shooter.ratings["finishing"] + random.randint(-10, 10)
+            shot_rating = shooter.ratings["finishing"] + random.randint(-15, 10)
 
         # Defense contest
         defender = random.choice(defense.players)
@@ -59,7 +59,7 @@ class GameSim:
             return
 
         # Make or miss
-        shot_roll = shot_rating + random.randint(-25, 25)
+        shot_roll = shot_rating + random.randint(-25, 20)
         if shot_roll > contest:
             shooter.stats["fg_made"] += 1
             shooter.stats["points"] += shot_value
@@ -82,7 +82,7 @@ class GameSim:
         off_reb_prob = off_reb_weight / total_weight
 
         # Decide which team gets the rebound
-        if random.random() < off_reb_prob:
+        if random.random() < off_reb_prob * 0.75:
             rebounder = random.choice(offense.players)
         else:
             rebounder = random.choice(defense.players)
@@ -122,7 +122,7 @@ class GameSim:
             p.reset_stats()
 
         # Pace variation
-        pace = random.randint(85, 105)
+        pace = random.randint(60, 75)
 
         for _ in range(pace):
             self.simulate_possession(self.team_a, self.team_b)
