@@ -1,20 +1,29 @@
+from archetypes import ARCHETYPES
+
 class Player:
-    def __init__(self, name, ratings):
+    def __init__(self, name, ratings, archetype="Two-Way"):
         """
         ratings = {
             "shooting": int,
-            "finishing": int,   
+            "finishing": int,
             "defense": int,
             "steal": int,
             "rebounding": int,
             "passing": int,
             "block": int,
-            "iq": int
+            "iq": int,
             "discipline": int   # affects fouls
         }
         """
         self.name = name
         self.ratings = ratings
+
+        # Add archetype system here
+        self.archetype = archetype
+        self.tendencies = ARCHETYPES[archetype]["tendencies"]
+        self.playstyle = ARCHETYPES[archetype]["playstyle"]
+
+        # Stats come after identity attributes
         self.stats = {
             "points": 0,
             "rebounds": 0,
@@ -30,4 +39,7 @@ class Player:
             "ft_attempts": 0,
             "ft_made": 0
         }
-        
+
+    def reset_stats(self):
+        for key in self.stats:
+            self.stats[key] = 0

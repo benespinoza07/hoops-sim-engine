@@ -21,31 +21,40 @@ class GameSim:
                 defender.stats["steals"] += 1
             return
 
-        # Decide shot type
-        shot_type_roll = random.random()
-        if shot_type_roll < 0.35:
+        # Archetype-based shot selection
+        shot_roll = random.random()
+
+        if shot_roll < shooter.tendencies["three_point_rate"]:
             shot_type = "three"
-        else:
+        elif shot_roll < shooter.tendencies["three_point_rate"] + shooter.tendencies["mid_range_rate"]:
             shot_type = "two"
+        else:
+            shot_type = "drive"
 
         # Attempt shot
         if shot_type == "three":
             shooter.stats["three_attempts"] += 1
             shooter.stats["fg_attempts"] += 1
-
             shot_value = 3
             shot_rating = shooter.ratings["three_point"]
-        else:
+
+        elif shot_type == "two":
             shooter.stats["fg_attempts"] += 1
             shot_value = 2
             shot_rating = shooter.ratings["shooting"]
+
+        else:  # Drive logic
+            shooter.stats["fg_attempts"] += 1
+            shot_value = 2
+            shot_rating = shooter.ratings["finishing"] + random.randint(-10, 10)
 
         # Defense contest
         defender = random.choice(defense.players)
         contest = defender.ratings["defense"] + random.randint(-10, 10)
 
-        # Block chance
-        if random.random() < (defender.ratings["block"] / 200):
+        # Block chance (higher on drives)
+        block_factor = 200 if shot_type != "drive" else 150
+        if random.random() < (defender.ratings["block"] / block_factor):
             defender.stats["blocks"] += 1
             return
 
@@ -66,20 +75,32 @@ class GameSim:
             return
 
         # Missed shot → rebound
-        if random.random() < 0.55:
+        off_reb_weight = sum(p.playstyle["rebound_focus"] for p in offense.players)
+        def_reb_weight = sum(p.playstyle["rebound_focus"] for p in defense.players)
+
+        total_weight = off_reb_weight + def_reb_weight
+        off_reb_prob = off_reb_weight / total_weight
+
+        # Decide which team gets the rebound
+        if random.random() < off_reb_prob:
             rebounder = random.choice(offense.players)
         else:
             rebounder = random.choice(defense.players)
 
         rebounder.stats["rebounds"] += 1
 
-        # Foul chance on shot
+
+        # Foul chance (archetype-influenced)
         foul_roll = random.random()
-        foul_chance = 0.07 + (0.02 * (50 - defender.ratings["discipline"]) / 50)
+        base_foul = 0.07
+        discipline_factor = (50 - defender.ratings["discipline"]) / 50
+        aggression_factor = shooter.playstyle["aggression"] * 0.02
+
+        foul_chance = base_foul + discipline_factor + aggression_factor
 
         if foul_roll < foul_chance:
             defender.stats["fouls"] += 1
-            self.shoot_free_throws(shooter, 2 if shot_type == "two" else 3)
+            self.shoot_free_throws(shooter, 2 if shot_type != "three" else 3)
 
     def shoot_free_throws(self, shooter, attempts):
         for _ in range(attempts):
@@ -90,25 +111,25 @@ class GameSim:
                 shooter.stats["ft_made"] += 1
                 shooter.stats["points"] += 1
 
-                # Add to team score
                 if shooter in self.team_a.players:
                     self.team_a.score += 1
                 else:
                     self.team_b.score += 1
 
-def simulate_game(self, possessions=100):
-    # Reset stats
-    for p in self.team_a.players + self.team_b.players:
-        p.reset_stats()
+    def simulate_game(self):
+        # Reset stats
+        for p in self.team_a.players + self.team_b.players:
+            p.reset_stats()
 
-    # Pace variation
-    pace = random.randint(85, 105)
+        # Pace variation
+        pace = random.randint(85, 105)
 
-    for _ in range(pace):
-        self.simulate_possession(self.team_a, self.team_b)
-        self.simulate_possession(self.team_b, self.team_a)
+        for _ in range(pace):
+            self.simulate_possession(self.team_a, self.team_b)
+            self.simulate_possession(self.team_b, self.team_a)
 
-    return self.generate_box_score()    
+        return self.generate_box_score()
+
     def generate_box_score(self):
         return {
             self.team_a.name: {
