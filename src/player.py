@@ -41,7 +41,11 @@ class Player:
             "three_attempts": 0,
             "three_made": 0,
             "ft_attempts": 0,
-            "ft_made": 0
+            "ft_made": 0,
+            "fatigue_load": 0,
+            "fatigue_shooting_penalty": 0,
+            "fatigue_defense_penalty": 0,
+            "fatigue_turnover_penalty": 0
         }
 
     def reset_stats(self):
