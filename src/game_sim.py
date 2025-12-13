@@ -260,11 +260,11 @@ class GameSim:
         for p in self.team_a.players + self.team_b.players:
             p.reset_stats()
 
-        total_possessions = random.randint(90, 110)
+        possessions_per_team = random.randint(90, 110)
 
-        for i in range(total_possessions // 2):
+        for i in range(possessions_per_team // 2):
 
-            if i == (total_possessions // 4):
+            if i == (possessions_per_team // 4):
                 for p in self.team_a.players + self.team_b.players:
                     p.stamina = min(p.max_stamina, p.stamina + 20)
 
