@@ -33,7 +33,12 @@ class Player:
         # Stats come after identity attributes
         self.stats = {
             "points": 0,
-            "rebounds": 0,
+            "rebounds": 0,           #Total rebounds Kept for convenience
+            
+            "off_rebounds": 0,
+            
+            "def_rebounds": 0,
+            
             "assists": 0,
             "steals": 0,
             "blocks": 0,

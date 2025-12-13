@@ -57,7 +57,6 @@ class GameSim:
         self.team_a = team_a
         self.team_b = team_b
 
-        # Earlier subs for realism
         self.sub_stamina_threshold = 50
         self.max_fouls_before_sub = 4
 
@@ -101,13 +100,14 @@ class GameSim:
         for p in offense.on_floor + defense.on_floor:
             p.stats["fatigue_load"] += 1
 
+        # ---------- REALISTIC TURNOVER SYSTEM ----------
         turnover_roll = random.random()
         fatigue_turnover_bonus = (100 - shooter.stamina) * 0.0012
         shooter.stats["fatigue_turnover_penalty"] += fatigue_turnover_bonus
 
         turnover_chance = (
-            0.07
-            + (0.02 * (50 - shooter.ratings["iq"]) / 50)
+            0.12
+            + (0.015 * (50 - shooter.ratings["iq"]) / 50)
             + fatigue_turnover_bonus
         )
 
@@ -153,7 +153,7 @@ class GameSim:
 
             shot_rating = shooter.ratings["finishing"] - fatigue_penalty + random.randint(-10, 10)
 
-        # ---------- Contest logic (tuned randomness) ----------
+        # ---------- Contest logic ----------
 
         defender = random.choice(defense.on_floor)
         defense_fatigue_penalty = (100 - defender.stamina) * 0.10
@@ -163,14 +163,19 @@ class GameSim:
 
         contest = (defender.ratings["defense"] - defense_fatigue_penalty) + random.randint(-5, 8)
 
-        # ---------- Block chance ----------
+        # ---------- REALISTIC BLOCK SYSTEM ----------
 
-        block_factor = 200 if shot_type != "drive" else 150
-        if random.random() < (defender.ratings["block"] / block_factor):
+        base_block = 0.03
+        drive_bonus = 0.02 if shot_type == "drive" else 0.0
+        rating_multiplier = defender.ratings["block"] / 100
+        block_chance = base_block + (rating_multiplier * 0.05) + drive_bonus
+        block_chance = min(block_chance, 0.12)
+
+        if random.random() < block_chance:
             defender.stats["blocks"] += 1
             return
 
-        # ---------- Make or miss (tuned randomness) ----------
+        # ---------- Make or miss ----------
 
         shot_roll = shot_rating + random.randint(-15, 15)
         if shot_roll > contest:
@@ -181,29 +186,49 @@ class GameSim:
             if shot_type == "three":
                 shooter.stats["three_made"] += 1
 
-            if random.random() < 0.40:
+            if random.random() < 0.28:
                 passer = random.choice([p for p in offense.on_floor if p != shooter])
                 passer.stats["assists"] += 1
             return
 
-        # ---------- Missed shot → rebound ----------
+        # ---------- REALISTIC REBOUNDING (POSITION‑WEIGHTED) ----------
 
         off_reb_weight = sum(p.playstyle["rebound_focus"] for p in offense.on_floor)
         def_reb_weight = sum(p.playstyle["rebound_focus"] for p in defense.on_floor)
         total_weight = off_reb_weight + def_reb_weight
         off_reb_prob = off_reb_weight / total_weight if total_weight > 0 else 0.5
 
+        position_reb_bonus = {
+            "PG": 0.3,
+            "SG": 0.5,
+            "SF": 0.8,
+            "PF": 1.5,
+            "C": 2.0
+        }
+
+        off_weights = [
+            p.playstyle["rebound_focus"] * position_reb_bonus.get(p.position, 1.0)
+            for p in offense.on_floor
+        ]
+
+        def_weights = [
+            p.playstyle["rebound_focus"] * position_reb_bonus.get(p.position, 1.0)
+            for p in defense.on_floor
+        ]
+
         if random.random() < off_reb_prob * 0.70:
-            rebounder = random.choice(offense.on_floor)
+            rebounder = random.choices(offense.on_floor, weights=off_weights, k=1)[0]
+            rebounder.stats["off_rebounds"] += 1
         else:
-            rebounder = random.choice(defense.on_floor)
+            rebounder = random.choices(defense.on_floor, weights=def_weights, k=1)[0]
+            rebounder.stats["def_rebounds"] += 1
 
         rebounder.stats["rebounds"] += 1
 
-        # ---------- Foul chance ----------
+        # ---------- REALISTIC FOUL / FREE THROW LOGIC ----------
 
         foul_roll = random.random()
-        base_foul = 0.06
+        base_foul = 0.18
         discipline_factor = (50 - defender.ratings["discipline"]) / 50
         aggression_factor = shooter.playstyle["aggression"] * 0.015
 
@@ -211,9 +236,14 @@ class GameSim:
 
         if foul_roll < foul_chance:
             defender.stats["fouls"] += 1
-            self.shoot_free_throws(shooter, 2 if shot_type != "three" else 3, offense)
 
-    # ---------- FIXED FREE THROW FUNCTION ----------
+            if random.random() < 0.70:
+                if shot_type == "three":
+                    self.shoot_free_throws(shooter, 3, offense)
+                else:
+                    self.shoot_free_throws(shooter, 2, offense)
+
+    # ---------- FREE THROWS ----------
 
     def shoot_free_throws(self, shooter, attempts, offense):
         for _ in range(attempts):
@@ -224,16 +254,17 @@ class GameSim:
                 shooter.stats["points"] += 1
                 offense.score += 1
 
+    # ---------- GAME LOOP (FIXED PACE) ----------
+
     def simulate_game(self):
         for p in self.team_a.players + self.team_b.players:
             p.reset_stats()
 
-        # NBA pace
-        pace = random.randint(90, 110)
+        total_possessions = random.randint(90, 110)
 
-        for i in range(pace):
+        for i in range(total_possessions // 2):
 
-            if i == pace // 2:
+            if i == (total_possessions // 4):
                 for p in self.team_a.players + self.team_b.players:
                     p.stamina = min(p.max_stamina, p.stamina + 20)
 
@@ -241,7 +272,7 @@ class GameSim:
             self.simulate_possession(self.team_b, self.team_a)
 
             for p in self.team_a.players + self.team_b.players:
-                p.stamina = min(p.max_stamina, p.stamina + 0.5)
+                p.stamina = min(p.max_stamina, p.stamina + 1.5)
 
             self.check_substitutions(self.team_a)
             self.check_substitutions(self.team_b)

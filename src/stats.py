@@ -2,13 +2,16 @@ from copy import deepcopy
 
 def calculate_possessions(team_box):
     """
-    Estimate possessions from box score.
-    Formula: (FGA - OREB) + TOV + (0.4 * FTA)
-    NOTE: Using total rebounds as a rough proxy for OREB.
+    Estimate possessions using:
+    FGA - OREB + TOV + 0.4 * FTA
+
+    Now uses actual offensive rebounds tracked in stats.
     """
+    oreb = team_box["off_rebounds"]
+
     return (
         team_box["fg_attempts"]
-        - team_box["rebounds"]  # TODO: replace with offensive rebounds later
+        - oreb
         + team_box["turnovers"]
         + 0.4 * team_box["ft_attempts"]
     )
@@ -72,7 +75,7 @@ def build_advanced_boxscore(game_result, team_a, team_b):
     # Team A possessions
     team_a_poss = calculate_possessions({
         "fg_attempts": sum(p.stats["fg_attempts"] for p in team_a.players),
-        "rebounds": sum(p.stats["rebounds"] for p in team_a.players),
+        "off_rebounds": sum(p.stats["off_rebounds"] for p in team_a.players),
         "turnovers": sum(p.stats["turnovers"] for p in team_a.players),
         "ft_attempts": sum(p.stats["ft_attempts"] for p in team_a.players)
     })
@@ -80,7 +83,7 @@ def build_advanced_boxscore(game_result, team_a, team_b):
     # Team B possessions
     team_b_poss = calculate_possessions({
         "fg_attempts": sum(p.stats["fg_attempts"] for p in team_b.players),
-        "rebounds": sum(p.stats["rebounds"] for p in team_b.players),
+        "off_rebounds": sum(p.stats["off_rebounds"] for p in team_b.players),
         "turnovers": sum(p.stats["turnovers"] for p in team_b.players),
         "ft_attempts": sum(p.stats["ft_attempts"] for p in team_b.players)
     })
