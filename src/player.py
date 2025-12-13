@@ -1,7 +1,7 @@
 from archetypes import ARCHETYPES
 
 class Player:
-    def __init__(self, name, ratings, archetype="Two-Way"):
+    def __init__(self, name, ratings, archetype="Two-Way", position="SG"):
         """
         ratings = {
             "shooting": int,
@@ -17,6 +17,9 @@ class Player:
         """
         self.name = name
         self.ratings = ratings
+
+        # Add position system (Option 1: PG, SG, SF, PF, C)
+        self.position = position
 
         # Add archetype system here
         self.archetype = archetype
@@ -42,6 +45,8 @@ class Player:
             "three_made": 0,
             "ft_attempts": 0,
             "ft_made": 0,
+
+            # Fatigue metrics
             "fatigue_load": 0,
             "fatigue_shooting_penalty": 0,
             "fatigue_defense_penalty": 0,
