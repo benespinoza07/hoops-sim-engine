@@ -1,4 +1,6 @@
 import random
+from game_sim import GameSim
+from stats import build_advanced_boxscore
 
 class League:
     def __init__(self, teams):
@@ -36,16 +38,14 @@ class League:
                         for _ in range(4):
                             self.schedule.append((a, b))
 
-        # 2. Same‑conference, different division (3–4 each)
+        # 2. Same‑conference, different division (3 each)
         conferences = set(t.conference for t in self.teams)
         for conf in conferences:
             conf_teams = self.get_conference_teams(conf)
-            # group by division
             div_groups = {}
             for t in conf_teams:
                 div_groups.setdefault(t.division, []).append(t)
 
-            # cross‑division matchups
             div_list = list(div_groups.values())
             for group_a in div_list:
                 for group_b in div_list:
@@ -53,7 +53,6 @@ class League:
                         continue
                     for team_a in group_a:
                         for team_b in group_b:
-                            # 3 or 4 games — simplified to 3
                             for _ in range(3):
                                 self.schedule.append((team_a, team_b))
 
@@ -67,6 +66,39 @@ class League:
                 self.schedule.append((w, e))
 
         random.shuffle(self.schedule)
+
+    # -------------------------
+    # SEASON SIMULATION
+    # -------------------------
+
+    def simulate_season(self):
+        """Simulate all scheduled games and update standings."""
+        self.season_boxscores = []
+
+        for team_a, team_b in self.schedule:
+
+            game = GameSim(team_a, team_b)
+            raw_box = game.simulate_game()
+
+            box = build_advanced_boxscore(raw_box, team_a, team_b)
+            self.season_boxscores.append(box)
+
+            a_score = box[team_a.name]["score"]
+            b_score = box[team_b.name]["score"]
+
+            # Handle ties (NBA cannot end tied)
+            while a_score == b_score:
+                game.simulate_possession(team_a, team_b)
+                game.simulate_possession(team_b, team_a)
+                a_score = team_a.score
+                b_score = team_b.score
+
+            if a_score > b_score:
+                self.update_standings(team_a.name, team_b.name)
+            else:
+                self.update_standings(team_b.name, team_a.name)
+
+        return self.season_boxscores
 
     # -------------------------
     # STANDINGS
