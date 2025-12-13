@@ -15,7 +15,7 @@ def select_shooter(offense):
     }
 
     weights = []
-    for p in offense.players:
+    for p in offense.on_floor:  # now uses on_floor
         base = position_weights.get(p.position, 1.0)
 
         shooting_factor = (p.ratings["shooting"] / 100) * 0.5
@@ -24,7 +24,7 @@ def select_shooter(offense):
         weight = base + shooting_factor + aggression_factor
         weights.append(weight)
 
-    return random.choices(offense.players, weights=weights, k=1)[0]
+    return random.choices(offense.on_floor, weights=weights, k=1)[0]
 
 
 def select_shot_type(shooter):
@@ -60,21 +60,62 @@ class GameSim:
         self.team_a = team_a
         self.team_b = team_b
 
+        # Substitution thresholds (you can tune these)
+        self.sub_stamina_threshold = 35      # below this, try to sub out
+        self.max_fouls_before_sub = 4        # simple foul trouble rule
+
+    # ---------- Substitution logic ----------
+
+    def check_substitutions(self, team):
+        """
+        Check on_floor players for low stamina or foul trouble.
+        Try to sub them out for a same-position bench player.
+        """
+        for player in list(team.on_floor):  # copy to avoid modifying while iterating
+            needs_sub = False
+
+            # Stamina-based subs
+            if player.stamina < self.sub_stamina_threshold:
+                needs_sub = True
+
+            # Simple foul-trouble logic
+            if player.stats["fouls"] >= self.max_fouls_before_sub:
+                needs_sub = True
+
+            if not needs_sub:
+                continue
+
+            # Try to find same-position replacement on bench
+            bench_candidates = team.get_bench_by_position(player.position)
+
+            if not bench_candidates:
+                # Fallback: any bench player, pick the one with highest stamina
+                if not team.bench:
+                    continue  # no subs available at all
+                bench_candidates = sorted(team.bench, key=lambda p: p.stamina, reverse=True)
+
+            # Choose bench player with highest stamina among candidates
+            sub_in = max(bench_candidates, key=lambda p: p.stamina)
+
+            # Execute substitution
+            team.swap_players(out_player=player, in_player=sub_in)
+
+    # ---------- Possession logic ----------
+
     def simulate_possession(self, offense, defense):
 
-        # NEW shooter selection
         shooter = select_shooter(offense)
 
         # Stamina drain for shooter
         shooter.stamina = max(0, shooter.stamina - random.randint(3, 6))
 
-        # Light stamina drain for all other players
-        for p in offense.players + defense.players:
+        # Light stamina drain for all other players on the floor
+        for p in offense.on_floor + defense.on_floor:
             if p != shooter:
                 p.stamina = max(0, p.stamina - random.randint(1, 2))
 
         # Fatigue load for being on the floor
-        for p in offense.players + defense.players:
+        for p in offense.on_floor + defense.on_floor:
             p.stats["fatigue_load"] += 1
 
         # Turnover chance (fatigue increases turnovers)
@@ -91,11 +132,11 @@ class GameSim:
         if turnover_roll < turnover_chance:
             shooter.stats["turnovers"] += 1
             if random.random() < 0.4:
-                defender = random.choice(defense.players)
+                defender = random.choice(defense.on_floor)
                 defender.stats["steals"] += 1
             return
 
-        # NEW shot type selection
+        # Shot type selection
         shot_type = select_shot_type(shooter)
 
         # Attempt shot (fatigue penalties applied)
@@ -131,7 +172,7 @@ class GameSim:
             shot_rating = shooter.ratings["finishing"] - fatigue_penalty + random.randint(-15, 10)
 
         # Defense contest (fatigue penalties applied)
-        defender = random.choice(defense.players)
+        defender = random.choice(defense.on_floor)
         defense_fatigue_penalty = (100 - defender.stamina) * 0.15
 
         defender.stats["fatigue_defense_penalty"] += defense_fatigue_penalty
@@ -156,20 +197,20 @@ class GameSim:
                 shooter.stats["three_made"] += 1
 
             if random.random() < 0.35:
-                passer = random.choice([p for p in offense.players if p != shooter])
+                passer = random.choice([p for p in offense.on_floor if p != shooter])
                 passer.stats["assists"] += 1
             return
 
-        # Missed shot → rebound
-        off_reb_weight = sum(p.playstyle["rebound_focus"] for p in offense.players)
-        def_reb_weight = sum(p.playstyle["rebound_focus"] for p in defense.players)
+        # Missed shot → rebound (still basic for now)
+        off_reb_weight = sum(p.playstyle["rebound_focus"] for p in offense.on_floor)
+        def_reb_weight = sum(p.playstyle["rebound_focus"] for p in defense.on_floor)
         total_weight = off_reb_weight + def_reb_weight
-        off_reb_prob = off_reb_weight / total_weight
+        off_reb_prob = off_reb_weight / total_weight if total_weight > 0 else 0.5
 
         if random.random() < off_reb_prob * 0.75:
-            rebounder = random.choice(offense.players)
+            rebounder = random.choice(offense.on_floor)
         else:
-            rebounder = random.choice(defense.players)
+            rebounder = random.choice(defense.on_floor)
 
         rebounder.stats["rebounds"] += 1
 
@@ -219,6 +260,10 @@ class GameSim:
             for p in self.team_a.players + self.team_b.players:
                 p.stamina = min(p.max_stamina, p.stamina + 0.5)
 
+            # Substitution checks after each pair of possessions
+            self.check_substitutions(self.team_a)
+            self.check_substitutions(self.team_b)
+
         return self.generate_box_score()
 
     def generate_box_score(self):
@@ -228,7 +273,8 @@ class GameSim:
                 "players": {
                     p.name: {
                         **p.stats,
-                        "stamina": p.stamina
+                        "stamina": p.stamina,
+                        "position": p.position
                     }
                     for p in self.team_a.players
                 }
@@ -238,7 +284,8 @@ class GameSim:
                 "players": {
                     p.name: {
                         **p.stats,
-                        "stamina": p.stamina
+                        "stamina": p.stamina,
+                        "position": p.position
                     }
                     for p in self.team_b.players
                 }
