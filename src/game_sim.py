@@ -60,6 +60,12 @@ class GameSim:
         self.sub_stamina_threshold = 50
         self.max_fouls_before_sub = 4
 
+        # team fouls hooks (per game for now, can become per-quarter later)
+        self.team_fouls = {
+            self.team_a.name: 0,
+            self.team_b.name: 0
+        }
+
     # ---------- Substitution logic ----------
 
     def check_substitutions(self, team):
@@ -84,6 +90,46 @@ class GameSim:
 
             sub_in = max(bench_candidates, key=lambda p: p.stamina)
             team.swap_players(out_player=player, in_player=sub_in)
+
+    # ---------- Helper: fastbreak after steal ----------
+
+    def simulate_fastbreak(self, offense, defense):
+        """
+        Simple fastbreak: higher chance of an easy 2, low contest.
+        """
+        scorer = select_shooter(offense)  # usually guard/wing, but keep it simple for now
+        scorer.stats["fg_attempts"] += 1
+        scorer.stats["fatigue_load"] += 1
+
+        # Fastbreak is usually a 2 at the rim
+        shot_value = 2
+        fatigue_penalty = (100 - scorer.stamina) * 0.04  # lighter than halfcourt
+        scorer.stats["fatigue_shooting_penalty"] += fatigue_penalty
+
+        shot_rating = scorer.ratings["finishing"] - fatigue_penalty + random.randint(-5, 10)
+
+        defender = random.choice(defense.on_floor)
+        defense_fatigue_penalty = (100 - defender.stamina) * 0.05  # slightly lower impact
+        defender.stats["fatigue_defense_penalty"] += defense_fatigue_penalty
+        defender.stats["fatigue_load"] += 1
+
+        contest = (defender.ratings["defense"] - defense_fatigue_penalty) + random.randint(-5, 5)
+
+        shot_roll = shot_rating + random.randint(-10, 10)
+        if shot_roll > contest:
+            scorer.stats["fg_made"] += 1
+            scorer.stats["points"] += shot_value
+            offense.score += shot_value
+
+            # Occasional fastbreak assist
+            if random.random() < 0.35:
+                passer = random.choice([p for p in offense.on_floor if p != scorer])
+                passer.stats["assists"] += 1
+
+    # ---------- Helper: record team foul ----------
+
+    def _add_team_foul(self, defense_team):
+        self.team_fouls[defense_team.name] += 1
 
     # ---------- Possession logic ----------
 
@@ -113,12 +159,30 @@ class GameSim:
 
         if turnover_roll < turnover_chance:
             shooter.stats["turnovers"] += 1
+
+            # some of these are steals → potential fastbreak
             if random.random() < 0.35:
                 defender = random.choice(defense.on_floor)
                 defender.stats["steals"] += 1
+
+                # chance of a fastbreak after the steal
+                if random.random() < 0.40:
+                    self.simulate_fastbreak(defense, offense)
             return
 
         shot_type = select_shot_type(shooter)
+
+        # ---------- Offensive foul on drive ----------
+
+        if shot_type == "drive":
+            offensive_foul_base = 0.03
+            discipline_penalty = (50 - shooter.ratings["discipline"]) / 100  # worse discipline = more charges
+            offensive_foul_chance = offensive_foul_base + discipline_penalty
+
+            if random.random() < offensive_foul_chance:
+                shooter.stats["fouls"] += 1
+                shooter.stats["turnovers"] += 1
+                return
 
         # ---------- Shot logic with tuned fatigue penalties ----------
 
@@ -143,7 +207,7 @@ class GameSim:
 
             shot_rating = shooter.ratings["shooting"] - fatigue_penalty
 
-        else:
+        else:  # drive
             shooter.stats["fg_attempts"] += 1
             shooter.stats["fatigue_load"] += 4
             shot_value = 2
@@ -175,7 +239,7 @@ class GameSim:
             defender.stats["blocks"] += 1
             return
 
-        # ---------- Make or miss ----------
+        # ---------- Make or miss + AND-1 logic ----------
 
         shot_roll = shot_rating + random.randint(-15, 15)
         if shot_roll > contest:
@@ -186,9 +250,22 @@ class GameSim:
             if shot_type == "three":
                 shooter.stats["three_made"] += 1
 
+            # Assist chance on made basket
             if random.random() < 0.28:
                 passer = random.choice([p for p in offense.on_floor if p != shooter])
                 passer.stats["assists"] += 1
+
+            # AND-1 chance on made shot (higher for drives)
+            and1_base = 0.04
+            if shot_type == "drive":
+                and1_base += 0.03
+            and1_chance = and1_base
+
+            if random.random() < and1_chance:
+                defender.stats["fouls"] += 1
+                self._add_team_foul(defense)
+                self.shoot_free_throws(shooter, 1, offense)
+
             return
 
         # ---------- REALISTIC REBOUNDING (POSITION‑WEIGHTED) ----------
@@ -225,7 +302,7 @@ class GameSim:
 
         rebounder.stats["rebounds"] += 1
 
-        # ---------- REALISTIC FOUL / FREE THROW LOGIC ----------
+        # ---------- REALISTIC FOUL / FREE THROW LOGIC (MISSED SHOT FOULS) ----------
 
         foul_roll = random.random()
         base_foul = 0.18
@@ -236,7 +313,9 @@ class GameSim:
 
         if foul_roll < foul_chance:
             defender.stats["fouls"] += 1
+            self._add_team_foul(defense)
 
+            # Only shooting fouls award free throws (non-bonus, for now)
             if random.random() < 0.70:
                 if shot_type == "three":
                     self.shoot_free_throws(shooter, 3, offense)
@@ -259,6 +338,10 @@ class GameSim:
     def simulate_game(self):
         for p in self.team_a.players + self.team_b.players:
             p.reset_stats()
+
+        # reset team fouls for this game
+        self.team_fouls[self.team_a.name] = 0
+        self.team_fouls[self.team_b.name] = 0
 
         possessions_per_team = random.randint(90, 110)
 
