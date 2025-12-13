@@ -224,19 +224,17 @@ class GameSim:
 
         if foul_roll < foul_chance:
             defender.stats["fouls"] += 1
-            self.shoot_free_throws(shooter, 2 if shot_type != "three" else 3)
+            self.shoot_free_throws(shooter, 2 if shot_type != "three" else 3, offense)
 
-    def shoot_free_throws(self, shooter, attempts):
+    # FIXED FREE THROW FUNCTION
+    def shoot_free_throws(self, shooter, attempts, offense):
         for _ in range(attempts):
             shooter.stats["ft_attempts"] += 1
             ft_roll = shooter.ratings["shooting"] + random.randint(-20, 20)
             if ft_roll > 50:
                 shooter.stats["ft_made"] += 1
                 shooter.stats["points"] += 1
-                if shooter in self.team_a.players:
-                    self.team_a.score += 1
-                else:
-                    self.team_b.score += 1
+                offense.score += 1
 
     def simulate_game(self):
         # Reset stats
