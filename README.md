@@ -14,23 +14,26 @@ A basketball simulation engine focused on realism, stats, and long-term league d
 
 ## Roadmap
 
-### v0.1 — Core Engine
+### v0.1 - Core Engine
 - Player model
 - Team model
 - Single game simulation
 - Box score output
 
-### v0.2 — Season Simulation
+### v0.2 - Season Simulation
 - Schedule generator
 - Standings
 - Basic playoffs
 
-### v0.3 — Player Development
+### v0.3 - Player Development
 - Aging
 - Potential
+- Ability
 - Randomness
+- Fatigue & Injuries
+- Stats
 
-### v0.4 — League Management
+### v0.4 - League Management
 - Draft
 - Free agency
 - Trades
