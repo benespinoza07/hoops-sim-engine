@@ -36,3 +36,11 @@ class Team:
         if in_player in self.bench:
             self.bench.remove(in_player)
             self.on_floor.append(in_player)
+
+    # -------------------------
+    # GAME RESET FIX
+    # -------------------------
+
+    def reset_game_state(self):
+        """Reset team-specific game state before a new game."""
+        self.score = 0
